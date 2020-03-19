@@ -329,7 +329,9 @@ def compute_accuracy(classifier, dirname, frame_subsample_count = 30):
     '''
     filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
     predictions = {}
-    
+    accuracy_sum=0
+    counter=0
+
     for vid in filenames:
         print('Dealing with video ', vid)
         
@@ -337,10 +339,16 @@ def compute_accuracy(classifier, dirname, frame_subsample_count = 30):
         face_finder = FaceFinder(join(dirname, vid), load_first_face = False)
         skipstep = max(floor(face_finder.length / frame_subsample_count), 0)
         face_finder.find_faces(resize=0.5, skipstep = skipstep)
-        print(len(face_finder))
+        # print(len(face_finder))
         print('Predicting ', vid)
         gen = FaceBatchGenerator(face_finder)
         p = predict_faces(gen, classifier)
         
         predictions[vid[:-4]] = (np.mean(p > 0.5), p)
+        counter+=1
+        accuracy_sum+=np.mean(p > 0.5)
+        average_accuracy=accuracy_sum/counter
+        print("Accuracy: ",np.mean(p > 0.5))
+        print("Average Accuracy till now: ",average_accuracy)
+
     return predictions
