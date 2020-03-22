@@ -16,6 +16,7 @@ print("Doing")
 classifier= generate_model(classifier,dirname,meta_data_file,batch_size=20)
 classifier.model.save_weights("gazab.h5")
 
-predictions = compute_accuracy(classifier, dirname)
+predictions = compute_accuracy(classifier, dirname, meta_data_file)
 for video_name in predictions:
     print('`{}` video class prediction :'.format(video_name), predictions[video_name][0])
+

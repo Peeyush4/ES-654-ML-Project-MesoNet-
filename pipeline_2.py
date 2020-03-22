@@ -9,8 +9,9 @@ from math import floor
 from scipy.ndimage.interpolation import zoom, rotate
 
 import imageio
-import face_recognition
-
+# import face_recognition
+from facenet_pytorch import MTCNN
+mtcnn=MTCNN(keep_all=True)
 
 ## Face extraction
 
@@ -46,10 +47,19 @@ class FaceFinder(Video):
         self.frame_shape = self.last_frame.shape[:2]
         self.last_location = (0, 200, 200, 0)
         if (load_first_face):
-            face_positions = face_recognition.face_locations(self.last_frame, number_of_times_to_upsample=2)
+            # face_positions = face_recognition.face_locations(self.last_frame)
+            face_positions=self.mtcnn_facelocations(self.last_frame)
             if len(face_positions) > 0:
                 self.last_location = face_positions[0]
+
+    def mtcnn_facelocations(self,image):
+        faces,probs=mtcnn.detect(image)
+        return faces
     
+    def mtcnn_facelandmarks(self,image):
+        faces,probs,landmarks=mtcnn.detect(image,landmarks=True)
+        return landmarks
+
     def load_coordinates(self, filename):
         np_coords = np.load(filename)
         self.coordinates = np_coords.item()
@@ -62,6 +72,7 @@ class FaceFinder(Video):
         y1 = min(loc[2] + offset, self.frame_shape[0])
         x0 = max(loc[3] - offset, 0)
         return (y0, x1, y1, x0)
+
     
     @staticmethod
     def upsample_location(reduced_location, upsampled_origin, factor):
@@ -150,7 +161,8 @@ class FaceFinder(Video):
             potential_face_patch_origin = (potential_location[0], potential_location[3])
     
             reduced_potential_face_patch = zoom(potential_face_patch, (resize, resize, 1))
-            reduced_face_locations = face_recognition.face_locations(reduced_potential_face_patch, model = 'cnn')
+            # reduced_face_locations = face_recognition.face_locations(reduced_potential_face_patch, model = 'cnn')
+            reduced_face_locations=self.mtcnn_facelocations(reduced_potential_face_patch)
             
             if len(reduced_face_locations) > 0:
                 no_face_acc = 0  # reset the no_face_acceleration mode accumulator
@@ -163,7 +175,8 @@ class FaceFinder(Video):
                 self.last_location = face_location
                 
                 # extract face rotation, length and center from landmarks
-                landmarks = face_recognition.face_landmarks(frame, [face_location])
+                # landmarks = face_recognition.face_landmarks(frame, [face_location])
+                landmarks=self.mtcnn_facelandmarks(frame) #Ye galat hai meko pata hai
                 if len(landmarks) > 0:
                     # we assume that there is one and only one landmark group
                     self.coordinates[i] = self.find_coordinates(landmarks[0])
@@ -172,11 +185,13 @@ class FaceFinder(Video):
 
                 if no_face_acc < no_face_acceleration_threshold:
                     # Look for face in full frame
-                    face_locations = face_recognition.face_locations(frame, number_of_times_to_upsample = 2)
+                    # face_locations = face_recognition.face_locations(frame)
+                    face_locations=self.mtcnn_facelocations(frame)
                 else:
                     # Avoid spending to much time on a long scene without faces
                     reduced_frame = zoom(frame, (resize, resize, 1))
-                    face_locations = face_recognition.face_locations(reduced_frame)
+                    # face_locations = face_recognition.face_locations(reduced_frame)
+                    face_locations=self.mtcnn_facelocations(reduced_frame)
                     
                 if len(face_locations) > 0:
                     print('Face extraction warning : ', i, '- found face in full frame', face_locations)
@@ -192,7 +207,8 @@ class FaceFinder(Video):
                     self.last_location = face_location
                     
                     # extract face rotation, length and center from landmarks
-                    landmarks = face_recognition.face_landmarks(frame, [face_location])
+                    # landmarks = face_recognition.face_landmarks(frame, [face_location])
+                    landmarks=self.mtcnn_facelandmarks(frame)#Ye bhi galat hai, meko pata hai
 
                     # print(landmarks)
                     if len(landmarks) > 0:
