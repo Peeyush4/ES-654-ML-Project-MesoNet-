@@ -10,8 +10,9 @@ from scipy.ndimage.interpolation import zoom, rotate
 
 import imageio
 # import face_recognition
-from facenet_pytorch import MTCNN
-mtcnn=MTCNN(keep_all=True)
+# from facenet_pytorch import MTCNN
+from mtcnn.mtcnn import MTCNN
+mtcnn=MTCNN()
 
 ## Face extraction
 
@@ -53,11 +54,13 @@ class FaceFinder(Video):
                 self.last_location = face_positions[0]
 
     def mtcnn_facelocations(self,image):
-        faces,probs=mtcnn.detect(image)
+        # faces,probs=mtcnn.detect(image)
+        faces=[i['box'] if 'box' in i else {} for i in mtcnn.detect_faces(image)  ]
         return faces
     
     def mtcnn_facelandmarks(self,image):
-        faces,probs,landmarks=mtcnn.detect(image,landmarks=True)
+        # faces,probs,landmarks=mtcnn.detect(image,landmarks=True)
+        landmarks=[i['keypoints'] if 'keypoints' in i for i in mtcnn.detect_faces(image) ]
         return landmarks
 
     def load_coordinates(self, filename):
@@ -109,22 +112,28 @@ class FaceFinder(Video):
         E1 = np.mean(landmark['left_eye'], axis=0)
         E2 = np.mean(landmark['right_eye'], axis=0)
         E = (E1 + E2) / 2
-        N = np.mean(landmark['nose_tip'], axis=0) / 2 + np.mean(landmark['nose_bridge'], axis=0) / 2
-        B1 = np.mean(landmark['top_lip'], axis=0)
-        B2 = np.mean(landmark['bottom_lip'], axis=0)
-        B = (B1 + B2) / 2
 
-        C = N
-        l1 = self.L2(E1, E2)
-        l2 = self.L2(B, E)
-        l = max(l1, l2) * K
-        if (B[1] == E[1]):
-            if (B[0] > E[0]):
-                rot = 90
-            else:
-                rot = -90
-        else:
-            rot = np.arctan((B[0] - E[0]) / (B[1] - E[1])) / np.pi * 180
+
+        l=K*self.L2(E1,E2)
+        rot=0
+        C=[0,0]
+
+        # N = np.mean(landmark['nose_tip'], axis=0) / 2 + np.mean(landmark['nose_bridge'], axis=0) / 2
+        # B1 = np.mean(landmark['top_lip'], axis=0)
+        # B2 = np.mean(landmark['bottom_lip'], axis=0)
+        # B = (B1 + B2) / 2
+
+        # C = N
+        # l1 = self.L2(E1, E2)
+        # l2 = self.L2(B, E)
+        # l = max(l1, l2) * K
+        # if (B[1] == E[1]):
+        #     if (B[0] > E[0]):
+        #         rot = 90
+        #     else:
+        #         rot = -90
+        # else:
+        #     rot = np.arctan((B[0] - E[0]) / (B[1] - E[1])) / np.pi * 180
         
         return ((floor(C[1]), floor(C[0])), floor(l), rot)
     
@@ -164,7 +173,7 @@ class FaceFinder(Video):
             # reduced_face_locations = face_recognition.face_locations(reduced_potential_face_patch, model = 'cnn')
             reduced_face_locations=self.mtcnn_facelocations(reduced_potential_face_patch)
             
-            if len(reduced_face_locations) > 0:
+            if reduced_face_locations is not None and len(reduced_face_locations) > 0:
                 no_face_acc = 0  # reset the no_face_acceleration mode accumulator
 
                 reduced_face_location = self.pop_largest_location(reduced_face_locations)
@@ -177,7 +186,7 @@ class FaceFinder(Video):
                 # extract face rotation, length and center from landmarks
                 # landmarks = face_recognition.face_landmarks(frame, [face_location])
                 landmarks=self.mtcnn_facelandmarks(frame) #Ye galat hai meko pata hai
-                if len(landmarks) > 0:
+                if landmarks is not None and len(landmarks) > 0:
                     # we assume that there is one and only one landmark group
                     self.coordinates[i] = self.find_coordinates(landmarks[0])
             else:
@@ -193,7 +202,7 @@ class FaceFinder(Video):
                     # face_locations = face_recognition.face_locations(reduced_frame)
                     face_locations=self.mtcnn_facelocations(reduced_frame)
                     
-                if len(face_locations) > 0:
+                if face_locations is not None and len(face_locations) > 0:
                     print('Face extraction warning : ', i, '- found face in full frame', face_locations)
                     no_face_acc = 0  # reset the no_face_acceleration mode accumulator
                     
@@ -211,7 +220,7 @@ class FaceFinder(Video):
                     landmarks=self.mtcnn_facelandmarks(frame)#Ye bhi galat hai, meko pata hai
 
                     # print(landmarks)
-                    if len(landmarks) > 0:
+                    if landmarks is not None and len(landmarks) > 0:
                         self.coordinates[i] = self.find_coordinates(landmarks[0])
                 else:
                     print('Face extraction warning : ',i, '- no face')
