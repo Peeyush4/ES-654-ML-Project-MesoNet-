@@ -1,9 +1,9 @@
 # -*- coding:utf-8 -*-
 
-import random, json
+import random, json,torch
 from os import listdir
 from os.path import isfile, join
-
+import cv2 as cv
 import numpy as np
 from math import floor
 from scipy.ndimage.interpolation import zoom, rotate
@@ -95,14 +95,11 @@ class FaceFinder(Video):
     def L2(A, B):
         return np.sqrt(np.sum(np.square(A - B)))
     
-        def find_faces(self, resize = 0.5, stop = 0, skipstep = 0, no_face_acceleration_threshold = 3, cut_left = 0, cut_right = -1, use_frameset = False, frameset = []):
+    def find_faces(self, resize = 0.5, stop = 0, skipstep = 0, no_face_acceleration_threshold = 3, cut_left = 0, cut_right = -1, use_frameset = False, frameset = []):
         '''
         The core function to extract faces from frames
         using previous frame location and downsampling to accelerate the loop.
         '''
-        not_found = 0
-        no_face = 0
-        no_face_acc = 0
         
         # to only deal with a subset of a video, for instance I-frames only
         if (use_frameset):
@@ -113,10 +110,10 @@ class FaceFinder(Video):
             else:
                 finder_frameset = range(0, self.length, skipstep + 1)
 
-        all_frames=[self.get(i) for i in finder_frameset]
+        # all_frames=[self.get(i) for i in finder_frameset]
         batch_size=20
-        for lb in np.arange(0, len(all_frames), batch_size):
-            imgs = [img for img in all_frames[lb:lb+batch_size]]
+        for lb in np.arange(0, len(finder_frameset), batch_size):
+            imgs = [self.get(i) for i in finder_frameset[lb:lb+batch_size]]
             self.faces.extend(mtcnn(imgs))
         
  
@@ -140,7 +137,8 @@ class FaceBatchGenerator:
 
     def resize_patch(self, patch):
         m, n = patch.shape[:2]
-        return zoom(patch, (self.target_size / m, self.target_size / n, 1))
+        return cv.resize(patch,(self.target_size,self.target_size))
+        # return zoom(patch, (self.target_size / m, self.target_size / n, 1))
     
     def next_batch(self, batch_size = 50):
         batch = np.zeros((1, self.target_size, self.target_size, 3))
@@ -149,6 +147,10 @@ class FaceBatchGenerator:
         while (i < batch_size) and (self.head < self.length):
             # if self.head in self.finder.coordinates:
             patch = self.finder.get_face(self.head)
+            if patch is None:
+                continue
+            if type(patch)==list:
+                patch=patch[0]
             batch = np.concatenate((batch, np.expand_dims(self.resize_patch(patch), axis = 0)),
                                         axis = 0)
             i += 1
