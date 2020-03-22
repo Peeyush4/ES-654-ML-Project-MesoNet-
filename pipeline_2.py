@@ -12,6 +12,7 @@ import imageio
 # import face_recognition
 # from facenet_pytorch import MTCNN
 from mtcnn.mtcnn import MTCNN
+from tqdm import tqdm
 mtcnn=MTCNN()
 
 ## Face extraction
@@ -203,7 +204,7 @@ class FaceFinder(Video):
                     face_locations=self.mtcnn_facelocations(reduced_frame)
                     
                 if face_locations is not None and len(face_locations) > 0:
-                    print('Face extraction warning : ', i, '- found face in full frame', face_locations)
+                    # print('Face extraction warning : ', i, '- found face in full frame', face_locations)
                     no_face_acc = 0  # reset the no_face_acceleration mode accumulator
                     
                     face_location = self.pop_largest_location(face_locations)
@@ -223,12 +224,12 @@ class FaceFinder(Video):
                     if landmarks is not None and len(landmarks) > 0:
                         self.coordinates[i] = self.find_coordinates(landmarks[0])
                 else:
-                    print('Face extraction warning : ',i, '- no face')
+                    # print('Face extraction warning : ',i, '- no face')
                     no_face_acc += 1
                     no_face += 1
 
-        print('Face extraction report of', 'not_found :', not_found)
-        print('Face extraction report of', 'no_face :', no_face)
+        # print('Face extraction report of', 'not_found :', not_found)
+        # print('Face extraction report of', 'no_face :', no_face)
         return 0
     
     def get_face(self, i):
@@ -323,9 +324,9 @@ def train_faces(generator, classifier, train_labels, batch_size = 50, output_siz
     '''
     n = len(generator.finder.coordinates.items())
     for epoch in range(n // batch_size + 1):
-        print("Training on ",epoch," epoch")
+        # print("Training on ",epoch," epoch")
         face_batch = generator.next_batch(batch_size = batch_size)
-        print(len(face_batch))
+        # print(len(face_batch))
         if len(face_batch):
             classifier.fit(face_batch, train_labels[:len(face_batch)])
     return classifier
@@ -333,8 +334,8 @@ def train_faces(generator, classifier, train_labels, batch_size = 50, output_siz
 def generate_model(classifier, dirname,meta_data_file, frame_subsample_count = 30,batch_size=50):
     filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
     meta_data=json.load(open(meta_data_file,"r"))
-    for vid in filenames:
-        print('Dealing with video ', vid)
+    for vid in tqdm(filenames):
+        # print('Dealing with video ', vid)
         if meta_data[vid]['label']=='FAKE':
             train_labels=[1]*batch_size
         else:
@@ -345,7 +346,7 @@ def generate_model(classifier, dirname,meta_data_file, frame_subsample_count = 3
         skipstep = max(floor(face_finder.length / frame_subsample_count), 0)
         face_finder.find_faces(resize=0.5, skipstep = skipstep)
         
-        print('Predicting ', vid)
+        # print('Training ', vid)
         gen = FaceBatchGenerator(face_finder)
         classifier= train_faces(gen, classifier, train_labels, batch_size=batch_size)
     return classifier
@@ -364,7 +365,8 @@ def compute_accuracy(classifier, dirname,meta_data_file, frame_subsample_count =
     logloss_sum=0
     counter=0
     meta_data=json.load(open(meta_data_file,"r"))
-    for vid in filenames:
+
+    for vid in tqdm(filenames):
         print('Dealing with video ', vid)
         
         # Compute face locations and store them in the face finder
