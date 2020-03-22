@@ -10,11 +10,12 @@ from scipy.ndimage.interpolation import zoom, rotate
 
 import imageio
 # import face_recognition
-# from facenet_pytorch import MTCNN
-from mtcnn.mtcnn import MTCNN
+from facenet_pytorch import MTCNN
+# from mtcnn.mtcnn import MTCNN
 from tqdm import tqdm
-mtcnn=MTCNN()
 
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+mtcnn=MTCNN(keep_all=True,post_process=False,device=device)
 ## Face extraction
 
 class Video:
@@ -43,7 +44,7 @@ class Video:
 class FaceFinder(Video):
     def __init__(self, path, load_first_face = True):
         super().__init__(path)
-        self.faces = {}
+        self.faces = []
         self.coordinates = {}  # stores the face (locations center, rotation, length)
         self.last_frame = self.get(0)
         self.frame_shape = self.last_frame.shape[:2]
@@ -53,16 +54,6 @@ class FaceFinder(Video):
             face_positions=self.mtcnn_facelocations(self.last_frame)
             if len(face_positions) > 0:
                 self.last_location = face_positions[0]
-
-    def mtcnn_facelocations(self,image):
-        # faces,probs=mtcnn.detect(image)
-        faces=[i['box'] if 'box' in i else {} for i in mtcnn.detect_faces(image)  ]
-        return faces
-    
-    def mtcnn_facelandmarks(self,image):
-        # faces,probs,landmarks=mtcnn.detect(image,landmarks=True)
-        landmarks=[i['keypoints'] if 'keypoints' in i for i in mtcnn.detect_faces(image) ]
-        return landmarks
 
     def load_coordinates(self, filename):
         np_coords = np.load(filename)
@@ -104,42 +95,7 @@ class FaceFinder(Video):
     def L2(A, B):
         return np.sqrt(np.sum(np.square(A - B)))
     
-    def find_coordinates(self, landmark, K = 2.2):
-        '''
-        We either choose K * distance(eyes, mouth),
-        or, if the head is tilted, K * distance(eye 1, eye 2)
-        /!\ landmarks coordinates are in (x,y) not (y,x)
-        '''
-        E1 = np.mean(landmark['left_eye'], axis=0)
-        E2 = np.mean(landmark['right_eye'], axis=0)
-        E = (E1 + E2) / 2
-
-
-        l=K*self.L2(E1,E2)
-        rot=0
-        C=[0,0]
-
-        # N = np.mean(landmark['nose_tip'], axis=0) / 2 + np.mean(landmark['nose_bridge'], axis=0) / 2
-        # B1 = np.mean(landmark['top_lip'], axis=0)
-        # B2 = np.mean(landmark['bottom_lip'], axis=0)
-        # B = (B1 + B2) / 2
-
-        # C = N
-        # l1 = self.L2(E1, E2)
-        # l2 = self.L2(B, E)
-        # l = max(l1, l2) * K
-        # if (B[1] == E[1]):
-        #     if (B[0] > E[0]):
-        #         rot = 90
-        #     else:
-        #         rot = -90
-        # else:
-        #     rot = np.arctan((B[0] - E[0]) / (B[1] - E[1])) / np.pi * 180
-        
-        return ((floor(C[1]), floor(C[0])), floor(l), rot)
-    
-    
-    def find_faces(self, resize = 0.5, stop = 0, skipstep = 0, no_face_acceleration_threshold = 3, cut_left = 0, cut_right = -1, use_frameset = False, frameset = []):
+        def find_faces(self, resize = 0.5, stop = 0, skipstep = 0, no_face_acceleration_threshold = 3, cut_left = 0, cut_right = -1, use_frameset = False, frameset = []):
         '''
         The core function to extract faces from frames
         using previous frame location and downsampling to accelerate the loop.
@@ -156,121 +112,17 @@ class FaceFinder(Video):
                 finder_frameset = range(0, min(self.length, stop), skipstep + 1)
             else:
                 finder_frameset = range(0, self.length, skipstep + 1)
+
+        all_frames=[self.get(i) for i in finder_frameset]
+        batch_size=20
+        for lb in np.arange(0, len(all_frames), batch_size):
+            imgs = [img for img in all_frames[lb:lb+batch_size]]
+            self.faces.extend(mtcnn(imgs))
         
-        # Quick face finder loop
-        for i in finder_frameset:
-            # Get frame
-            frame = self.get(i)
-            if (cut_left != 0 or cut_right != -1):
-                frame[:, :cut_left] = 0
-                frame[:, cut_right:] = 0            
-            
-            # Find face in the previously found zone
-            potential_location = self.expand_location_zone(self.last_location)
-            potential_face_patch = frame[potential_location[0]:potential_location[2], potential_location[3]:potential_location[1]]
-            potential_face_patch_origin = (potential_location[0], potential_location[3])
-    
-            reduced_potential_face_patch = zoom(potential_face_patch, (resize, resize, 1))
-            # reduced_face_locations = face_recognition.face_locations(reduced_potential_face_patch, model = 'cnn')
-            reduced_face_locations=self.mtcnn_facelocations(reduced_potential_face_patch)
-            
-            if reduced_face_locations is not None and len(reduced_face_locations) > 0:
-                no_face_acc = 0  # reset the no_face_acceleration mode accumulator
-
-                reduced_face_location = self.pop_largest_location(reduced_face_locations)
-                face_location = self.upsample_location(reduced_face_location,
-                                                    potential_face_patch_origin,
-                                                    1 / resize)
-                self.faces[i] = face_location
-                self.last_location = face_location
-                
-                # extract face rotation, length and center from landmarks
-                # landmarks = face_recognition.face_landmarks(frame, [face_location])
-                landmarks=self.mtcnn_facelandmarks(frame) #Ye galat hai meko pata hai
-                if landmarks is not None and len(landmarks) > 0:
-                    # we assume that there is one and only one landmark group
-                    self.coordinates[i] = self.find_coordinates(landmarks[0])
-            else:
-                not_found += 1
-
-                if no_face_acc < no_face_acceleration_threshold:
-                    # Look for face in full frame
-                    # face_locations = face_recognition.face_locations(frame)
-                    face_locations=self.mtcnn_facelocations(frame)
-                else:
-                    # Avoid spending to much time on a long scene without faces
-                    reduced_frame = zoom(frame, (resize, resize, 1))
-                    # face_locations = face_recognition.face_locations(reduced_frame)
-                    face_locations=self.mtcnn_facelocations(reduced_frame)
-                    
-                if face_locations is not None and len(face_locations) > 0:
-                    # print('Face extraction warning : ', i, '- found face in full frame', face_locations)
-                    no_face_acc = 0  # reset the no_face_acceleration mode accumulator
-                    
-                    face_location = self.pop_largest_location(face_locations)
-                    
-                    # if was found on a reduced frame, upsample location
-                    if no_face_acc > no_face_acceleration_threshold:
-                        face_location = self.upsample_location(face_location, (0, 0), 1 / resize)
-                    
-                    self.faces[i] = face_location
-                    self.last_location = face_location
-                    
-                    # extract face rotation, length and center from landmarks
-                    # landmarks = face_recognition.face_landmarks(frame, [face_location])
-                    landmarks=self.mtcnn_facelandmarks(frame)#Ye bhi galat hai, meko pata hai
-
-                    # print(landmarks)
-                    if landmarks is not None and len(landmarks) > 0:
-                        self.coordinates[i] = self.find_coordinates(landmarks[0])
-                else:
-                    # print('Face extraction warning : ',i, '- no face')
-                    no_face_acc += 1
-                    no_face += 1
-
-        # print('Face extraction report of', 'not_found :', not_found)
-        # print('Face extraction report of', 'no_face :', no_face)
-        return 0
-    
+ 
     def get_face(self, i):
         ''' Basic unused face extraction without alignment '''
-        frame = self.get(i)
-        if i in self.faces:
-            loc = self.faces[i]
-            patch = frame[loc[0]:loc[2], loc[3]:loc[1]]
-            return patch
-        return frame
-    
-    @staticmethod
-    def get_image_slice(img, y0, y1, x0, x1):
-        '''Get values outside the domain of an image'''
-        m, n = img.shape[:2]
-        padding = max(-y0, y1-m, -x0, x1-n, 0)
-        padded_img = np.pad(img, ((padding, padding), (padding, padding), (0, 0)), 'reflect')
-        return padded_img[(padding + y0):(padding + y1),
-                        (padding + x0):(padding + x1)]
-    
-    def get_aligned_face(self, i, l_factor = 1.3):
-        '''
-        The second core function that converts the data from self.coordinates into an face image.
-        '''
-        frame = self.get(i)
-        if i in self.coordinates:
-            c, l, r = self.coordinates[i]
-            l = int(l) * l_factor # fine-tuning the face zoom we really want
-            dl_ = floor(np.sqrt(2) * l / 2) # largest zone even when rotated
-            patch = self.get_image_slice(frame,
-                                    floor(c[0] - dl_),
-                                    floor(c[0] + dl_),
-                                    floor(c[1] - dl_),
-                                    floor(c[1] + dl_))
-            rotated_patch = rotate(patch, -r, reshape=False)
-            # note : dl_ is the center of the patch of length 2dl_
-            return self.get_image_slice(rotated_patch,
-                                    floor(dl_-l//2),
-                                    floor(dl_+l//2),
-                                    floor(dl_-l//2),
-                                    floor(dl_+l//2))
+        frame = self.faces[i]
         return frame
 
 
@@ -295,11 +147,11 @@ class FaceBatchGenerator:
         stop = min(self.head + batch_size, self.length)
         i = 0
         while (i < batch_size) and (self.head < self.length):
-            if self.head in self.finder.coordinates:
-                patch = self.finder.get_aligned_face(self.head)
-                batch = np.concatenate((batch, np.expand_dims(self.resize_patch(patch), axis = 0)),
+            # if self.head in self.finder.coordinates:
+            patch = self.finder.get_face(self.head)
+            batch = np.concatenate((batch, np.expand_dims(self.resize_patch(patch), axis = 0)),
                                         axis = 0)
-                i += 1
+            i += 1
             self.head += 1
         return batch[1:]
 
