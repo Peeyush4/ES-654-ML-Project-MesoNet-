@@ -1,6 +1,6 @@
 import numpy as np
 from classifiers import *
-from pipeline import *
+from pipeline_2 import *
 
 from keras.preprocessing.image import ImageDataGenerator
 
