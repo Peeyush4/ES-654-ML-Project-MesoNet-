@@ -10,12 +10,13 @@ from scipy.ndimage.interpolation import zoom, rotate
 
 import imageio
 # import face_recognition
-from facenet_pytorch import MTCNN
-# from mtcnn.mtcnn import MTCNN
+# from facenet_pytorch import MTCNN
+from mtcnn.mtcnn import MTCNN
 from tqdm import tqdm
-
-device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-mtcnn=MTCNN(keep_all=True,post_process=False,device=device)
+mtcnn=MTCNN()
+# device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+# device=None
+# mtcnn=MTCNN(keep_all=False,post_process=False,device=device)
 ## Face extraction
 
 class Video:
@@ -48,12 +49,7 @@ class FaceFinder(Video):
         self.coordinates = {}  # stores the face (locations center, rotation, length)
         self.last_frame = self.get(0)
         self.frame_shape = self.last_frame.shape[:2]
-        self.last_location = (0, 200, 200, 0)
-        if (load_first_face):
-            # face_positions = face_recognition.face_locations(self.last_frame)
-            face_positions=self.mtcnn_facelocations(self.last_frame)
-            if len(face_positions) > 0:
-                self.last_location = face_positions[0]
+
 
     def load_coordinates(self, filename):
         np_coords = np.load(filename)
@@ -90,6 +86,15 @@ class FaceFinder(Video):
                     max_size = size
                     max_location = location
         return max_location
+
+    @staticmethod
+    def get_image_slice(img, y0, y1, x0, x1):
+        '''Get values outside the domain of an image'''
+        m, n = img.shape[:2]
+        padding = max(-y0, y1-m, -x0, x1-n, 0)
+        padded_img = np.pad(img, ((padding, padding), (padding, padding), (0, 0)), 'reflect')
+        return padded_img[(padding + y0):(padding + y1),
+                        (padding + x0):(padding + x1)]
     
     @staticmethod
     def L2(A, B):
@@ -111,10 +116,15 @@ class FaceFinder(Video):
                 finder_frameset = range(0, self.length, skipstep + 1)
 
         # all_frames=[self.get(i) for i in finder_frameset]
-        batch_size=20
-        for lb in np.arange(0, len(finder_frameset), batch_size):
-            imgs = [self.get(i) for i in finder_frameset[lb:lb+batch_size]]
-            self.faces.extend(mtcnn(imgs))
+        # batch_size=2
+        # for lb in np.arange(0, len(finder_frameset), batch_size):
+        #     imgs = [self.get(i) for i in finder_frameset[lb:lb+batch_size]]
+        #     self.faces.extend(mtcnn(imgs))
+        #     print(len(mtcnn(imgs)),mtcnn(imgs)[0].shape)
+        for i in finder_frameset:
+            frame=self.get(i)
+            face=get_image_slice(frame,mtcnn.detect_faces(frame)[0]['box']) 
+            self.faces.append(face)
         
  
     def get_face(self, i):
@@ -136,9 +146,10 @@ class FaceBatchGenerator:
         self.length = int(face_finder.length)
 
     def resize_patch(self, patch):
+        patch=patch.permute(1,2,0)
         m, n = patch.shape[:2]
-        return cv.resize(patch,(self.target_size,self.target_size))
-        # return zoom(patch, (self.target_size / m, self.target_size / n, 1))
+        # return cv.resize(patch,(self.target_size,self.target_size))
+        return zoom(patch.numpy(), (self.target_size / m, self.target_size / n, 1))
     
     def next_batch(self, batch_size = 50):
         batch = np.zeros((1, self.target_size, self.target_size, 3))
@@ -149,8 +160,6 @@ class FaceBatchGenerator:
             patch = self.finder.get_face(self.head)
             if patch is None:
                 continue
-            if type(patch)==list:
-                patch=patch[0]
             batch = np.concatenate((batch, np.expand_dims(self.resize_patch(patch), axis = 0)),
                                         axis = 0)
             i += 1
