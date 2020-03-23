@@ -104,4 +104,4 @@ def generate_faces_and_facedict(dirname,meta_data_file,frame_subsample_count=30,
         c=time()
         print("Time taken for finding all faces: ",b-a," Time taken for storing all faces: ",c-b)
                 
-generate_faces_and_facedict("train_videos","meta_data.json",batch_size=5)
+generate_faces_and_facedict("train_videos","metadata.json",batch_size=5)
