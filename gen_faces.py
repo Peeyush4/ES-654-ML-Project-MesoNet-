@@ -10,6 +10,9 @@ from math import floor
 import cv2 as cv
 from scipy.ndimage.interpolation import zoom
 
+FACE_DICT_FILE_NAME="face_dict.json"
+FINAL_IMAGES_FOLDER="face_images/"
+
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 mtcnn=MTCNN(keep_all=True,post_process=False,device=device)
 
@@ -21,7 +24,7 @@ def resize_patch(patch,target_size=256):
 def store_images(dictionary):
 
     for image_name in dictionary:
-        cv.imwrite(image_name+".jpg",resize_patch(dictionary[image_name][0]))
+        cv.imwrite(FINAL_IMAGES_FOLDER+image_name+".jpg",resize_patch(dictionary[image_name][0]))
 
 def store_json(filename,dictionary):
 
@@ -57,12 +60,12 @@ class Video:
         return self.length
 
 def generate_faces_and_facedict(dirname,meta_data_file,frame_subsample_count=30,batch_size=2):
-
-    FACE_DICT_FILE_NAME="face_dict.json"
+    
     # remove(FACE_DICT_FILE_NAME) # To remove previous versions
 
     filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
     meta_data=json.load(open(meta_data_file,"r"))
+
     for vid in tqdm(filenames):
 
         print('Dealing with video ', vid)
@@ -79,11 +82,18 @@ def generate_faces_and_facedict(dirname,meta_data_file,frame_subsample_count=30,
             for frame_faces in multiple_frame_faces:
                 if frame_faces is None:
                     continue
-                if len(frame_faces)==0:
-                    continue
-                for face in frame_faces:
+                if type(frame_faces)==list:    
+                    if len(frame_faces)==0:
+                        continue
+                    for face in frame_faces:
+                        if face is None:
+                            continue
+                        video.faces[vid[:-4]+"_"+str(face_counter)]=face_label
+                        video.images[vid[:-4]+"_"+str(face_counter)]=face
+                        face_counter+=1
+                else:
                     video.faces[vid[:-4]+"_"+str(face_counter)]=face_label
-                    video.images[vid[:-4]+"_"+str(face_counter)]=face
+                    video.images[vid[:-4]+"_"+str(face_counter)]=frame_faces
                     face_counter+=1
         b=time()
         store_json(FACE_DICT_FILE_NAME,video.faces)
