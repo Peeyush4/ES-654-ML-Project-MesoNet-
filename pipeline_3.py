@@ -5,7 +5,6 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score
-FINAL_IMAGES_FOLDER="face_images/"
 
 ## Face prediction
 
@@ -13,12 +12,13 @@ class FaceBatchGenerator:
     '''
     Made to deal with framesubsets of video.
     '''
-    def __init__(self, face_dict, target_size = 256):
+    def __init__(self, face_dict, image_dir, target_size = 256):
         self.face_dict = face_dict
         self.image_name_list=self.face_dict.keys()
         self.target_size = target_size
         self.head = 0
         self.length = len(face_dict)
+        self.image_dir=image_dir
 
     def get_face_and_label(self,i):
         image_name=self.image_name_list[i]+".jpg"
@@ -27,7 +27,7 @@ class FaceBatchGenerator:
             label=1
         else:
             label=0
-        return cv.imread(FINAL_IMAGES_FOLDER+image_name),label
+        return cv.imread(self.image_dir+image_name),label
     
     def next_batch(self, batch_size = 50):
         batch = np.zeros((1, self.target_size, self.target_size, 3))
@@ -70,11 +70,13 @@ def train_faces(generator, classifier, batch_size = 50, output_size = 1):
             classifier.fit(face_batch, train_labels)
             prediction=classifier.predict(face_batch)
             print("Training accuracy on this batch: ",accuracy_score(train_labels,prediction))
+        if epoch%5==0:
+            classifier.model.save_weights("gazab_baccha_"+str(epoch)+".h5")
     return classifier
 
-def generate_model(classifier, face_dict, frame_subsample_count = 30,batch_size=50):
+def generate_model(classifier, train_images_dir,face_dict, frame_subsample_count = 30,batch_size=50):
     face_dict=json.load(open(face_dict,"r"))
-    gen = FaceBatchGenerator(face_dict)
+    gen = FaceBatchGenerator(face_dict,train_images_dir)
     classifier= train_faces(gen, classifier, batch_size=batch_size)
     return classifier
 
@@ -112,12 +114,12 @@ def acc_and_logloss_videowise(all_face_names,actual_labels,pred_labels):
     
     return accuracy_score(roundof(all_pred),all_actual),logloss_multiple(all_actual,all_pred) 
 
-def compute_accuracy(classifier, face_dict, frame_subsample_count = 30,batch_size=50):
+def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_count = 30,batch_size=50):
     '''
     Extraction + Prediction over a video
     '''
     face_dict=json.load(open(face_dict,"r"))
-    gen = FaceBatchGenerator(face_dict)
+    gen = FaceBatchGenerator(face_dict,test_image_dir)
     predictions = {}
     all_actual=[]
     all_pred=[]
