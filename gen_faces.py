@@ -1,8 +1,8 @@
 import numpy as np
 import json
 from tqdm import tqdm
-from os import listdir,remove
-from os.path import isfile,join
+from os import listdir,remove,mkdir
+from os.path import isfile,join,isdir
 from facenet_pytorch import MTCNN
 import imageio,torch
 from time import time
@@ -12,6 +12,9 @@ from scipy.ndimage.interpolation import zoom
 
 FACE_DICT_FILE_NAME="face_dict.json"
 FINAL_IMAGES_FOLDER="face_images/"
+
+if not isdir(FINAL_IMAGES_FOLDER):
+    mkdir(FINAL_IMAGES_FOLDER)
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 mtcnn=MTCNN(keep_all=True,post_process=False,device=device)
