@@ -1,5 +1,4 @@
 curl 'https://storage.googleapis.com/kaggle-competitions-detached-data/16880/dfdc_train_part_21.zip?GoogleAccessId=web-data@kaggle-161607.iam.gserviceaccount.com&Expires=1585208524&Signature=nV4GmqHXKxwItwl3eGnGX5rwkepYtWYZ7PDZuHg4Ub9uwdsbQyQdDh%2F9tbg1vAXlo5IA4%2F6j%2FwadItlNDhONjYbXgV941qBxFcmC1dP2c%2Bdr9qbB%2B43Y6i50T7PUhtUMRqsEYwpzHuBg1n7wHTBYuF7EtUgmpPZHBkcuQJEvNOcelBKd1dnD2GG4%2BSj%2BFoCZgxMNQI1fjDs%2BY4qbmiMQxbO2HYizRpevemVf2%2B2JInGf8qz7wi8iS9oyh%2FEWVKvviUB3IVLsW5vsFswOFqVbKayCXHfLyujPs%2BirkzjEdvA55pC7EUEXvHbCrV6E%2Blj0dDY814a6XOxKnLSMjIRh7A%3D%3D' -H 'User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:73.0) Gecko/20100101 Firefox/73.0' -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'DNT: 1' -H 'Connection: keep-alive' -H 'Upgrade-Insecure-Requests: 1' -o dfdc_train_part_21.zip
 unzip dfdc_train_part_21.zip
-mv dfdc_train_part_21/ ES-654-ML-Project-Mesonet-/train_videos/
-cd ES-654-ML-Project-Mesonet-
+mv dfdc_train_part_21/ train_videos/
 mv train_videos/metadata.json .
