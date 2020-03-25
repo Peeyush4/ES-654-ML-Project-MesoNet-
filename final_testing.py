@@ -9,15 +9,17 @@ from time import time
 from math import floor
 import cv2 as cv
 from scipy.ndimage.interpolation import zoom
-
-FACE_DICT_FILE_NAME="face_dict.json"
-FINAL_IMAGES_FOLDER="face_images_2/"
+from classifiers import *
+from pipeline_3 import FaceBatchGenerator,acc_and_logloss_videowise,roundof,accuracy_score,logloss_multiple
+PRED_FACE_DICT="pred_dict.json"
+PRED_IMAGES="pred_images/"
 
 if not isdir(FINAL_IMAGES_FOLDER):
     mkdir(FINAL_IMAGES_FOLDER)
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 mtcnn=MTCNN(keep_all=True,post_process=False,device=device)
+
 
 def resize_patch(patch,target_size=256):
     patch=patch.permute(1,2,0)
@@ -62,17 +64,24 @@ class Video:
     def __len__(self):
         return self.length
 
-def generate_faces_and_facedict(dirname,meta_data_file,frame_subsample_count=30,batch_size=2):
+def generate_faces_and_facedict(dirname,meta_data_file=None,frame_subsample_count=30,batch_size=2):
     
-    # remove(FACE_DICT_FILE_NAME) # To remove previous versions
+    remove(FACE_DICT_FILE_NAME) # To remove previous versions
 
     filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
-    meta_data=json.load(open(meta_data_file,"r"))
+    
+    if meta_data_file is not None:
+        meta_data=json.load(open(meta_data_file,"r"))
+    else:
+        meta_data=None
     thread_list=[]
     for vid in tqdm(filenames):
 
         print('Dealing with video ', vid)
-        face_label=meta_data[vid]['label']
+        if meta_data is not None:
+            face_label=meta_data[vid]['label']
+        else:
+            face_label=None
         video=Video(join(dirname, vid))
         skipstep = max(floor(video.length / frame_subsample_count), 0)
         finder_frameset = range(0, video.length, skipstep + 1)
@@ -109,3 +118,69 @@ def generate_faces_and_facedict(dirname,meta_data_file,frame_subsample_count=30,
     for thread in thread_list:
         thread.join()
 generate_faces_and_facedict("train_videos","metadata.json",batch_size=5)
+
+PREDICTION_FOLDER="prediction_videos/"
+MODEL_FILE="models/gazab_baccha.h5"
+torch.cuda.device(None)
+classifier=Meso4()
+classifier.load(MODEL_FILE)
+
+def prb2label(pred):
+    if float(pred[0])<=0.5:
+        return "REAL"
+    else:
+        return "FAKE"
+
+def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_count = 30,batch_size=50):
+    '''
+    Extraction + Prediction over a video
+    '''
+    face_dict=json.load(open(face_dict,"r"))
+    gen = FaceBatchGenerator(face_dict,test_image_dir)
+    all_actual=[]
+    all_pred=[]
+    all_face_names=[]
+
+    for _ in range(gen.length // batch_size + 1):
+        face_batch,actual_label = gen.next_batch(batch_size = batch_size)
+        face_names = gen.batch_names
+        prediction = classifier.predict(face_batch)        
+        all_actual.extend(actual_label)
+        all_pred.extend(prediction)
+        all_face_names.extend(face_names)
+        
+        if actual_label is not None:
+            print("Accuracy till now: ",accuracy_score(all_actual,roundof(all_pred)))
+            print("Log loss till now: ",logloss_multiple(all_actual,all_pred))
+
+            acc,logl=acc_and_logloss_videowise(all_face_names,all_actual,all_pred)
+            print("Accuracy Videowise: ",acc)
+            print("Logloss Videowise: ",logl)
+    
+        predictions=predictions_from_face_results(all_face_names,all_pred)
+        for name in predictions:
+            predictions[name]={"probability":predictions[name],"prediction":prb2label(predictions[name])}
+    return predictions
+
+def predictions_from_face_results(all_face_names,pred_labels):
+    face_name_dict=dict()
+
+    for face_name,pred_label in zip(all_face_names,pred_labels):
+        video_name=face_name.split("_")[0]
+        if video_name in face_name_dict:
+            face_name_dict[video_name].append(pred_label)
+        else:
+            face_name_dict[video_name]=[pred_label]
+
+    for video_name in face_name_dict:
+        pred_labels=face_name_dict[video_name]
+        pred=np.mean(np.array(pred_labels)>0.5)
+        face_name_dict[video_name]=pred
+
+    return face_name_dict
+
+predictions=compute_accuracy(classifier,PREDICTION_FOLDER,PRED_FACE_DICT)
+def store_predictions(predictions):
+    json.dump(predictions,open("predictions.json","w"))
+
+store_predictions(predictions)
