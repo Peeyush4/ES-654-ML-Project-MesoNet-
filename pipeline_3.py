@@ -91,11 +91,10 @@ def logloss(actual_label,pred_label):
     return min(1,-x)
 
 def roundof(lis):
-#    print(lis)
     try:
-        return [round(float(i)) for i in lis]
-    except:
         return [round(float(i[0])) for i in lis]
+    except:
+        return [round(float(i)) for i in lis]
 
 def logloss_multiple(actual_labels,pred_labels):
     return (1/len(actual_labels))*sum([logloss(actual_label,pred_label) for (actual_label,pred_label) in zip(actual_labels,pred_labels)])
@@ -141,7 +140,6 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
         prediction = classifier.predict(face_batch)
         for name,pred in zip(face_names,prediction):
             predictions[name]=pred
-        #actual_label=gen.train_labels
         all_actual.extend(actual_label)
         all_pred.extend(prediction)
         all_face_names.extend(face_names)

@@ -1,5 +1,5 @@
 import numpy as np
-import json
+import json,multiprocessing
 from tqdm import tqdm
 from os import listdir,remove,mkdir
 from os.path import isfile,join,isdir
@@ -11,7 +11,7 @@ import cv2 as cv
 from scipy.ndimage.interpolation import zoom
 
 FACE_DICT_FILE_NAME="face_dict.json"
-FINAL_IMAGES_FOLDER="face_images/"
+FINAL_IMAGES_FOLDER="face_images_2/"
 
 if not isdir(FINAL_IMAGES_FOLDER):
     mkdir(FINAL_IMAGES_FOLDER)
@@ -100,7 +100,9 @@ def generate_faces_and_facedict(dirname,meta_data_file,frame_subsample_count=30,
                     face_counter+=1
         b=time()
         store_json(FACE_DICT_FILE_NAME,video.faces)
-        store_images(video.images)
+        p1=multiprocessing.Process(target=store_images,args=video.images)
+        p1.start()
+        # store_images(video.images)
         c=time()
         print("Time taken for finding all faces: ",b-a," Time taken for storing all faces: ",c-b)
                 
