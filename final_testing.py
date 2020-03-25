@@ -20,6 +20,9 @@ if not isdir(PRED_IMAGES):
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 mtcnn=MTCNN(keep_all=True,post_process=False,device=device)
 
+def store_predictions(predictions):
+    json.dump(predictions,open("predictions.json","w"))
+
 
 def resize_patch(patch,target_size=256):
     patch=patch.permute(1,2,0)
@@ -29,7 +32,7 @@ def resize_patch(patch,target_size=256):
 def store_images(dictionary):
 
     for image_name in dictionary:
-        cv.imwrite(FINAL_IMAGES_FOLDER+image_name+".jpg",resize_patch(dictionary[image_name][0]))
+        cv.imwrite(PRED_IMAGES+image_name+".jpg",resize_patch(dictionary[image_name][0]))
 
 def store_json(filename,dictionary):
 
@@ -66,7 +69,7 @@ class Video:
 
 def generate_faces_and_facedict(dirname,meta_data_file=None,frame_subsample_count=30,batch_size=2):
     
-    remove(FACE_DICT_FILE_NAME) # To remove previous versions
+    remove(PRED_FACE_DICT) # To remove previous versions
 
     filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
     
@@ -108,7 +111,7 @@ def generate_faces_and_facedict(dirname,meta_data_file=None,frame_subsample_coun
                     video.images[vid[:-4]+"_"+str(face_counter)]=frame_faces
                     face_counter+=1
         b=time()
-        store_json(FACE_DICT_FILE_NAME,video.faces)
+        store_json(PRED_FACE_DICT,video.faces)
         p1=threading.Thread(target=store_images,args=(video.images,))
         p1.start()
         thread_list.append(p1)
@@ -117,13 +120,6 @@ def generate_faces_and_facedict(dirname,meta_data_file=None,frame_subsample_coun
         print("Time taken for finding all faces: ",b-a," Time taken for storing all faces: ",c-b)
     for thread in thread_list:
         thread.join()
-generate_faces_and_facedict("train_videos","metadata.json",batch_size=5)
-
-PREDICTION_FOLDER="prediction_videos/"
-MODEL_FILE="models/gazab_baccha.h5"
-torch.cuda.device(None)
-classifier=Meso4()
-classifier.load(MODEL_FILE)
 
 def prb2label(pred):
     if float(pred[0])<=0.5:
@@ -179,8 +175,13 @@ def predictions_from_face_results(all_face_names,pred_labels):
 
     return face_name_dict
 
+PREDICTION_FOLDER="prediction_videos/"
+MODEL_FILE="models/gazab_baccha.h5"
+METADATA_FILE="metadata.json"
+# METADATA_FILE=None
+generate_faces_and_facedict(PREDICTION_FOLDER,METADATA_FILE,batch_size=5)
+torch.cuda.device(None)
+classifier=Meso4()
+classifier.load(MODEL_FILE)
 predictions=compute_accuracy(classifier,PREDICTION_FOLDER,PRED_FACE_DICT)
-def store_predictions(predictions):
-    json.dump(predictions,open("predictions.json","w"))
-
 store_predictions(predictions)
