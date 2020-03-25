@@ -14,8 +14,8 @@ from pipeline_3 import FaceBatchGenerator,acc_and_logloss_videowise,roundof,accu
 PRED_FACE_DICT="pred_dict.json"
 PRED_IMAGES="pred_images/"
 
-if not isdir(FINAL_IMAGES_FOLDER):
-    mkdir(FINAL_IMAGES_FOLDER)
+if not isdir(PRED_IMAGES):
+    mkdir(PRED_IMAGES)
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 mtcnn=MTCNN(keep_all=True,post_process=False,device=device)
