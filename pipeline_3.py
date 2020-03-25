@@ -25,7 +25,9 @@ class FaceBatchGenerator:
     def get_face_and_label(self,i):
         image_name=self.image_name_list[i]+".jpg"
         label=self.face_dict[self.image_name_list[i]]
-        if label=="FAKE":
+        if label=="not_present":
+            pass
+        elif label=="FAKE":
             label=1
         else:
             label=0

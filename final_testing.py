@@ -69,7 +69,8 @@ class Video:
 
 def generate_faces_and_facedict(dirname,meta_data_file=None,frame_subsample_count=30,batch_size=2):
     
-    remove(PRED_FACE_DICT) # To remove previous versions
+    if isdir(PRED_FACE_DICT):
+        remove(PRED_FACE_DICT) # To remove previous versions
 
     filenames = [f for f in listdir(dirname) if isfile(join(dirname, f)) and ((f[-4:] == '.mp4') or (f[-4:] == '.avi') or (f[-4:] == '.mov'))]
     
@@ -84,7 +85,7 @@ def generate_faces_and_facedict(dirname,meta_data_file=None,frame_subsample_coun
         if meta_data is not None:
             face_label=meta_data[vid]['label']
         else:
-            face_label=None
+            face_label="not_present"
         video=Video(join(dirname, vid))
         skipstep = max(floor(video.length / frame_subsample_count), 0)
         finder_frameset = range(0, video.length, skipstep + 1)
@@ -120,9 +121,10 @@ def generate_faces_and_facedict(dirname,meta_data_file=None,frame_subsample_coun
         print("Time taken for finding all faces: ",b-a," Time taken for storing all faces: ",c-b)
     for thread in thread_list:
         thread.join()
+    print("All threads joined")
 
 def prb2label(pred):
-    if float(pred[0])<=0.5:
+    if pred<=0.5:
         return "REAL"
     else:
         return "FAKE"
@@ -137,7 +139,8 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
     all_pred=[]
     all_face_names=[]
 
-    for _ in range(gen.length // batch_size + 1):
+    for _ in tqdm(range(gen.length // batch_size + 1)):
+
         face_batch,actual_label = gen.next_batch(batch_size = batch_size)
         face_names = gen.batch_names
         prediction = classifier.predict(face_batch)        
@@ -145,7 +148,7 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
         all_pred.extend(prediction)
         all_face_names.extend(face_names)
         
-        if actual_label is not None:
+        if actual_label[0]!="not_present":
             print("Accuracy till now: ",accuracy_score(all_actual,roundof(all_pred)))
             print("Log loss till now: ",logloss_multiple(all_actual,all_pred))
 
@@ -183,5 +186,5 @@ generate_faces_and_facedict(PREDICTION_FOLDER,METADATA_FILE,batch_size=5)
 torch.cuda.device(None)
 classifier=Meso4()
 classifier.load(MODEL_FILE)
-predictions=compute_accuracy(classifier,PREDICTION_FOLDER,PRED_FACE_DICT)
+predictions=compute_accuracy(classifier,PRED_IMAGES,PRED_FACE_DICT)
 store_predictions(predictions)
