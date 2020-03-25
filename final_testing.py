@@ -14,6 +14,9 @@ from pipeline_3 import FaceBatchGenerator,acc_and_logloss_videowise,roundof,accu
 PRED_FACE_DICT="pred_dict.json"
 PRED_IMAGES="pred_images/"
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+
 if not isdir(PRED_IMAGES):
     mkdir(PRED_IMAGES)
 
