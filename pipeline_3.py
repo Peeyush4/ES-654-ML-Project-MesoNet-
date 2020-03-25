@@ -5,7 +5,7 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score
-
+from random import shuffle
 ## Face prediction
 
 class FaceBatchGenerator:
@@ -14,12 +14,14 @@ class FaceBatchGenerator:
     '''
     def __init__(self, face_dict, image_dir, target_size = 256):
         self.face_dict = face_dict
-        self.image_name_list=self.face_dict.keys()
+        self.image_name_list=list(self.face_dict.keys())
         self.target_size = target_size
         self.head = 0
         self.length = len(face_dict)
         self.image_dir=image_dir
-
+    def shuffle(self):
+        shuffle(self.image_name_list)
+        self.head=0
     def get_face_and_label(self,i):
         image_name=self.image_name_list[i]+".jpg"
         label=self.face_dict[self.image_name_list[i]]
@@ -59,18 +61,22 @@ def predict_faces(generator, classifier, batch_size = 50, output_size = 1):
             profile = np.concatenate((profile, prediction))
     return profile[1:]
 
-def train_faces(generator, classifier, batch_size = 50, output_size = 1):
+def train_faces(generator, classifier, epochs=10,batch_size = 50, output_size = 1):
     '''
     Train for a face batch generator
     '''
-    for epoch in range(generator.length // batch_size + 1):
-        print("Training epoch:",epoch)
-        face_batch,train_labels = generator.next_batch(batch_size = batch_size)
-        if len(face_batch):
-            classifier.fit(face_batch, train_labels)
-            prediction=classifier.predict(face_batch)
-            print("Training accuracy on this batch: ",accuracy_score(train_labels,prediction))
-        if epoch%5==0:
+    print("Total epochs: ",generator.length//batch_size+1)
+    for epoch in tqdm(range(epochs)):
+        print("Training epoch:",epoch+1)
+        generator.shuffle()
+        for _ in tqdm(range(generator.length // batch_size + 1)):
+       
+            face_batch,train_labels = generator.next_batch(batch_size = batch_size)
+            if len(face_batch):
+                classifier.fit(face_batch, train_labels)
+                #prediction=classifier.predict(face_batch)
+                #print("Training accuracy on this batch: ",accuracy_score(train_labels,roundof(prediction)))
+        if epoch%2==0:
             classifier.model.save_weights("gazab_baccha_"+str(epoch)+".h5")
     return classifier
 
@@ -85,7 +91,11 @@ def logloss(actual_label,pred_label):
     return min(1,-x)
 
 def roundof(lis):
-    return [round(i) for i in lis]
+#    print(lis)
+    try:
+        return [round(float(i)) for i in lis]
+    except:
+        return [round(float(i[0])) for i in lis]
 
 def logloss_multiple(actual_labels,pred_labels):
     return (1/len(actual_labels))*sum([logloss(actual_label,pred_label) for (actual_label,pred_label) in zip(actual_labels,pred_labels)])
@@ -108,7 +118,7 @@ def acc_and_logloss_videowise(all_face_names,actual_labels,pred_labels):
     for video_name in face_name_dict:
         pred_labels=face_name_dict[video_name][1]
         actual_labels=face_name_dict[video_name][0]
-        pred=np.mean(pred_labels>0.5)
+        pred=np.mean(np.array(pred_labels)>0.5)
         all_actual.append(actual_labels[0])
         all_pred.append(pred)
     
@@ -126,14 +136,14 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
     all_face_names=[]
 
     for epoch in range(gen.length // batch_size + 1):
-        face_batch = gen.next_batch(batch_size = batch_size)
+        face_batch,actual_label = gen.next_batch(batch_size = batch_size)
         face_names = gen.batch_names
         prediction = classifier.predict(face_batch)
         for name,pred in zip(face_names,prediction):
             predictions[name]=pred
-        actual_label=gen.train_labels
+        #actual_label=gen.train_labels
         all_actual.extend(actual_label)
-        all_pred.extend(predictions)
+        all_pred.extend(prediction)
         all_face_names.extend(face_names)
         print("Accuracy till now: ",accuracy_score(all_actual,roundof(all_pred)))
         print("Log loss till now: ",logloss_multiple(all_actual,all_pred))
