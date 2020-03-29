@@ -78,14 +78,13 @@ def train_faces(generator, classifier, epochs=10,batch_size = 50, output_size = 
                 classifier.fit(face_batch, train_labels)
                 #prediction=classifier.predict(face_batch)
                 #print("Training accuracy on this batch: ",accuracy_score(train_labels,roundof(prediction)))
-        if epoch%2==0:
-            classifier.model.save_weights("gazab_baccha_"+str(epoch)+".h5")
+        classifier.model.save_weights("gazab_baccha_"+str(epoch)+".h5")
     return classifier
 
-def generate_model(classifier, train_images_dir,face_dict, frame_subsample_count = 30,batch_size=50):
+def generate_model(classifier, train_images_dir,face_dict, frame_subsample_count = 30,batch_size=50,epochs=4):
     face_dict=json.load(open(face_dict,"r"))
     gen = FaceBatchGenerator(face_dict,train_images_dir)
-    classifier= train_faces(gen, classifier, batch_size=batch_size)
+    classifier= train_faces(gen, classifier, batch_size=batch_size,epochs=epochs)
     return classifier
 
 def logloss(actual_label,pred_label):
@@ -125,13 +124,36 @@ def acc_and_logloss_videowise(all_face_names,actual_labels,pred_labels):
     
     return accuracy_score(roundof(all_pred),all_actual),logloss_multiple(all_actual,all_pred) 
 
+def predictions_from_face_results(all_face_names,pred_labels):
+    face_name_dict=dict()
+
+    for face_name,pred_label in zip(all_face_names,pred_labels):
+        video_name=face_name.split("_")[0]
+        if video_name in face_name_dict:
+            face_name_dict[video_name].append(pred_label)
+        else:
+            face_name_dict[video_name]=[pred_label]
+
+    for video_name in face_name_dict:
+        pred_labels=face_name_dict[video_name]
+        pred=np.mean(np.array(pred_labels)>0.5)
+        face_name_dict[video_name]=pred
+
+    return face_name_dict
+
+def prb2label(pred):
+    if pred<=0.5:
+        return "REAL"
+    else:
+        return "FAKE"
+
 def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_count = 30,batch_size=50):
     '''
     Extraction + Prediction over a video
     '''
     face_dict=json.load(open(face_dict,"r"))
     gen = FaceBatchGenerator(face_dict,test_image_dir)
-    predictions = {}
+    # predictions = {}
     all_actual=[]
     all_pred=[]
     all_face_names=[]
@@ -140,8 +162,8 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
         face_batch,actual_label = gen.next_batch(batch_size = batch_size)
         face_names = gen.batch_names
         prediction = classifier.predict(face_batch)
-        for name,pred in zip(face_names,prediction):
-            predictions[name]=pred
+        # for name,pred in zip(face_names,prediction):
+        #     predictions[name]=pred
         all_actual.extend(actual_label)
         all_pred.extend(prediction)
         all_face_names.extend(face_names)
@@ -152,4 +174,7 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
         print("Accuracy Videowise: ",acc)
         print("Logloss Videowise: ",logl)
 
-    return predictions,all_actual,all_pred,all_face_names
+    predictions=predictions_from_face_results(all_face_names,all_pred)
+    for name in predictions:
+        predictions[name]={"probability":predictions[name],"prediction":prb2label(predictions[name])}
+    return predictions

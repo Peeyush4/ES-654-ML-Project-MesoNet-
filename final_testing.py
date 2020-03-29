@@ -10,7 +10,7 @@ from math import floor
 import cv2 as cv
 from scipy.ndimage.interpolation import zoom
 from classifiers import *
-from pipeline_3 import FaceBatchGenerator,acc_and_logloss_videowise,roundof,accuracy_score,logloss_multiple
+from pipeline_3 import FaceBatchGenerator,acc_and_logloss_videowise,roundof,accuracy_score,logloss_multiple,predictions_from_face_results
 PRED_FACE_DICT="pred_dict.json"
 PRED_IMAGES="pred_images/"
 
@@ -159,27 +159,12 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
             print("Accuracy Videowise: ",acc)
             print("Logloss Videowise: ",logl)
     
-        predictions=predictions_from_face_results(all_face_names,all_pred)
-        for name in predictions:
-            predictions[name]={"probability":predictions[name],"prediction":prb2label(predictions[name])}
+    predictions=predictions_from_face_results(all_face_names,all_pred)
+    for name in predictions:
+        predictions[name]={"probability":predictions[name],"prediction":prb2label(predictions[name])}
     return predictions
 
-def predictions_from_face_results(all_face_names,pred_labels):
-    face_name_dict=dict()
 
-    for face_name,pred_label in zip(all_face_names,pred_labels):
-        video_name=face_name.split("_")[0]
-        if video_name in face_name_dict:
-            face_name_dict[video_name].append(pred_label)
-        else:
-            face_name_dict[video_name]=[pred_label]
-
-    for video_name in face_name_dict:
-        pred_labels=face_name_dict[video_name]
-        pred=np.mean(np.array(pred_labels)>0.5)
-        face_name_dict[video_name]=pred
-
-    return face_name_dict
 
 PREDICTION_FOLDER="prediction_videos/"
 MODEL_FILE="models/gazab_baccha.h5"
