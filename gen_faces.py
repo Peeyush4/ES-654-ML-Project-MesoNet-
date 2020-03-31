@@ -108,4 +108,4 @@ def generate_faces_and_facedict(dirname,meta_data_file,frame_subsample_count=30,
         print("Time taken for finding all faces: ",b-a," Time taken for storing all faces: ",c-b)
     for thread in thread_list:
         thread.join()
-generate_faces_and_facedict("train_videos","metadata.json",batch_size=5)
+generate_faces_and_facedict("train_videos","all_metadata.json",batch_size=5)

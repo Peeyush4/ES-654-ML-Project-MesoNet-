@@ -168,7 +168,7 @@ def compute_accuracy(classifier, test_image_dir, face_dict, frame_subsample_coun
 
 PREDICTION_FOLDER="prediction_videos/"
 MODEL_FILE="models/gazab_baccha.h5"
-METADATA_FILE="metadata.json"
+METADATA_FILE="all_metadata.json"
 # METADATA_FILE=None
 generate_faces_and_facedict(PREDICTION_FOLDER,METADATA_FILE,batch_size=5)
 torch.cuda.device(None)
